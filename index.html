@@ -86,6 +86,14 @@ input,select,textarea{font:inherit;color:inherit}
 .list{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-top:1px solid var(--line2);text-align:left}
 .row:first-child{border-top:0}
+.row{cursor:pointer}
+.editbtn{flex:none;width:40px;height:40px;margin:-6px -8px -6px 0;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#B9B2A7}
+.editbtn:active{background:#EFEBE4;color:var(--ink)}
+.lrow{display:grid;grid-template-columns:1fr 1fr 34px;gap:6px;align-items:center;padding:8px;border:1px solid var(--line2);border-radius:12px;margin-bottom:8px;background:#fff}
+.lrow .inp{height:40px;font-size:14px;padding:0 8px}
+.lrow .full{grid-column:1 / span 2}
+.lrow .x{width:34px;height:40px;border-radius:9px;color:var(--danger);font-size:18px}
+.lrow .x:active{background:#FBEDEC}
 .row:active{background:#FAF8F4}
 .av{width:38px;height:38px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;background:var(--chip);color:var(--ink)}
 .av.day{background:var(--day);color:var(--day-ink)}.av.night{background:var(--night);color:var(--night-ink)}
@@ -358,13 +366,13 @@ function studentList(arr){
   if(!state.students.length)return `<div class="list"><div class="empty">아직 수강생이 없어요.<br>＋ 수강생 버튼으로 추가해 보세요.</div></div>`;
   if(!arr.length)return `<div class="list"><div class="empty">검색 결과가 없어요.</div></div>`;
   let h='<div class="list">';
-  arr.forEach(s=>{h+=`<button class="row" data-act="student" data-id="${s.id}"><div class="av ${s.type==='shift'?shiftOf(s,thisMonday):''}">${esc(short(s.name).slice(0,1))}</div><div class="grow"><div class="nm">${esc(s.name)}</div><div class="mt">${esc(lessonSummary(s))}</div></div>${s.type==='shift'?`<span class="tag ${shiftOf(s,thisMonday)}">이번 주 ${CYC[shiftOf(s,thisMonday)]}</span>`:''}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9C3B9" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button>`});
+  arr.forEach(s=>{h+=`<div class="row" role="button" tabindex="0" data-act="student" data-id="${s.id}"><div class="av ${s.type==='shift'?shiftOf(s,thisMonday):''}">${esc(short(s.name).slice(0,1))}</div><div class="grow"><div class="nm">${esc(s.name)}</div><div class="mt">${esc(lessonSummary(s))}</div></div>${s.type==='shift'?`<span class="tag ${shiftOf(s,thisMonday)}">이번 주 ${CYC[shiftOf(s,thisMonday)]}</span>`:''}<button class="editbtn" data-act="editstudent" data-id="${s.id}" aria-label="${esc(s.name)} 수정"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button></div>`});
   return h+'</div>';
 }
 
 /* ---------- sheets ---------- */
 let sheetCtx=null;
-function openSheet(html){const o=$('#ov');o.innerHTML=`<div class="sheet" role="dialog"><div class="grab"></div>${html}</div>`;o.classList.add('on');document.body.style.overflow='hidden'}
+function openSheet(html,keep){const o=$('#ov');const old=o.querySelector('.sheet');const st=keep&&old?old.scrollTop:0;o.innerHTML=`<div class="sheet" role="dialog"><div class="grab"></div>${html}</div>`;o.classList.add('on');document.body.style.overflow='hidden';if(st)o.querySelector('.sheet').scrollTop=st}
 function closeSheet(){$('#ov').classList.remove('on');$('#ov').innerHTML='';sheetCtx=null;document.body.style.overflow=''}
 function confirmDlg(msg,yes,onYes){const d=$('#dlg');d.innerHTML=`<div class="in"><p>${msg}</p><div class="acts" style="margin-top:0"><button class="btn" data-act="dlgno">취소</button><button class="btn primary" style="background:var(--danger);border-color:var(--danger)" data-act="dlgyes">${yes}</button></div></div>`;d.classList.add('on');d._yes=onYes}
 let toastT;function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),1900)}
@@ -492,7 +500,7 @@ function drawStudent(){
   const once=all.filter(l=>isOnce(l)).sort((a,b)=>a.date<b.date?-1:1);
   const item=l=>`<button class="li" data-act="lesson" data-id="${l.id}">${DAYS[l.day]}요일 ${range(l.hour)}<span>수정 ›</span></button>`;
   const cur=s.type==='shift'?shiftOf(s,thisMonday):'';
-  let h=`<div class="sh"><div style="display:flex;align-items:center;gap:12px"><div class="av ${cur}" style="width:46px;height:46px;font-size:18px">${esc(short(s.name).slice(0,1))}</div><div><h2>${esc(s.name)}</h2><div style="font-size:12.5px;color:var(--sub);margin-top:2px">${s.type==='shift'?'교대 근무 · 매주 주간/야간이 바뀌어요':'일반 · 매주 같은 시간'}</div></div></div><button class="btn ghost" data-act="close">닫기</button></div>`;
+  let h=`<div class="sh"><div style="display:flex;align-items:center;gap:12px"><div class="av ${cur}" style="width:46px;height:46px;font-size:18px">${esc(short(s.name).slice(0,1))}</div><div><h2>${esc(s.name)}</h2><div style="font-size:12.5px;color:var(--sub);margin-top:2px">${s.type==='shift'?'교대 근무 · 매주 주간/야간이 바뀌어요':'일반 · 매주 같은 시간'}</div></div></div><div style="display:flex;gap:4px"><button class="btn" style="height:34px;padding:0 12px" data-act="editstudent" data-id="${s.id}">수정</button><button class="btn ghost" style="height:34px;padding:0 8px" data-act="close">닫기</button></div></div>`;
   if(s.memo)h+=`<div class="box" style="white-space:pre-wrap;font-size:14px">${esc(s.memo)}</div>`;
   if(s.type==='shift'){
     h+=`<div class="box"><div style="font-size:12.5px;font-weight:600;color:var(--sub);margin-bottom:8px">이번 주 근무 (${weekLabel(thisMonday)})</div><div class="opts c2"><button class="opt day ${cur==='day'?'on':''}" data-act="setshift" data-v="day">주간 근무</button><button class="opt night ${cur==='night'?'on':''}" data-act="setshift" data-v="night">야간 근무</button></div><div class="note">다음 주는 ${CYC[cur==='day'?'night':'day']} 근무로 자동으로 바뀌어요. 근무 순서가 틀어지면 여기서 이번 주 근무만 고쳐 주세요.</div></div>`;
@@ -503,7 +511,7 @@ function drawStudent(){
   }
   if(once.length){h+=`<div class="sec">보강 · 상담 (한 번만)</div>`+once.map(l=>{const past=parseYmd(l.date)<new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());return `<button class="li" data-act="lesson" data-id="${l.id}" style="${past?'opacity:.5':''}">${md(l.date)} (${DAYS[l.day]}) ${range(l.hour)} · ${ONCE_LBL[l.cycle]}<span>${past?'지남':'수정 ›'}</span></button>`}).join('')}
   const up=upcoming(s);
-  if(up.length){h+=`<div class="sec">다가오는 레슨</div><div class="box" style="padding:4px 12px">`+up.map(u=>`<div class="up"><b style="font-weight:600">${u.dt.getMonth()+1}/${u.dt.getDate()} (${DAYS[u.l.day]}) ${hh(u.l.hour)}${u.isOnce(l)?' · 보강':''}</b><span>${u.w===0?'이번 주':u.w===1?'다음 주':`${u.w}주 뒤`}</span></div>`).join('')+`</div>`}
+  if(up.length){h+=`<div class="sec">다가오는 레슨</div><div class="box" style="padding:4px 12px">`+up.map(u=>`<div class="up"><b style="font-weight:600">${u.dt.getMonth()+1}/${u.dt.getDate()} (${DAYS[u.l.day]}) ${hh(u.l.hour)}${isOnce(u.l)?' · '+ONCE_LBL[u.l.cycle]:''}</b><span>${u.w===0?'이번 주':u.w===1?'다음 주':`${u.w}주 뒤`}</span></div>`).join('')+`</div>`}
   h+=`<div class="acts"><button class="btn" data-act="addfor" data-id="${s.id}">＋ 레슨 추가</button><button class="btn primary" data-act="focus" data-id="${s.id}">시간표에서 보기</button></div>`;
   h+=`<div class="acts" style="margin-top:8px"><button class="btn ghost" data-act="editstudent" data-id="${s.id}">정보 수정</button><button class="btn ghost danger" data-act="delstudent" data-id="${s.id}">수강생 삭제</button></div>`;
   openSheet(h);
@@ -511,26 +519,49 @@ function drawStudent(){
 function openStudentForm(id){
   const s=id?stu(id):null;
   const d=s?{...s,cur:shiftOf(s,thisMonday)||'day'}:{id:null,name:'',type:'regular',memo:'',cur:'day'};
+  d.lessons=s?state.lessons.filter(l=>l.sid===s.id).sort((a,b)=>(isOnce(a)-isOnce(b))||a.day-b.day||a.hour-b.hour).map(l=>({...l})):[];
   sheetCtx={kind:'sform',d};drawStudentForm();
 }
-function drawStudentForm(){
-  const d=sheetCtx.d;
+function lessonRow(l,i,shift){
+  const st=settings();
+  const c=l.cycle||'weekly';
+  const cyc=[['weekly','매주']].concat(shift?[['day','주간 근무 주'],['night','야간 근무 주']]:[]).concat([['once','보강 (한 번)'],['consult','상담 (한 번)']]);
+  let dl=st.days.includes(l.day)?st.days:[...st.days,l.day].sort((a,b)=>a-b);
+  let hl=hoursList();if(!hl.includes(l.hour))hl=[...hl,l.hour].sort((a,b)=>a-b);
+  const once=c==='once'||c==='consult';
+  let h=`<div class="lrow"><select class="inp full" data-li="${i}" data-lk="cycle">${cyc.map(([k,t])=>`<option value="${k}" ${k===c?'selected':''}>${t}</option>`).join('')}</select><button class="x" data-act="lrmv" data-v="${i}" aria-label="레슨 삭제">✕</button>`;
+  h+=once?`<input type="date" class="inp" data-li="${i}" data-lk="date" value="${esc(l.date||'')}">`:`<select class="inp" data-li="${i}" data-lk="day">${dl.map(x=>`<option value="${x}" ${x===l.day?'selected':''}>${DAYS[x]}요일</option>`).join('')}</select>`;
+  h+=`<select class="inp" data-li="${i}" data-lk="hour">${hl.map(x=>`<option value="${x}" ${x===l.hour?'selected':''}>${range(x)}</option>`).join('')}</select><span></span></div>`;
+  return h;
+}
+function drawStudentForm(keep){
+  const d=sheetCtx.d,shift=d.type==='shift';
   let h=`<div class="sh"><h2>${d.id?'수강생 정보 수정':'새 수강생'}</h2><button class="btn ghost" data-act="close">닫기</button></div>`;
   h+=`<div class="field"><label>이름</label><input class="inp" data-f="name" value="${esc(d.name)}" placeholder="예: 홍길동님"></div>`;
-  h+=`<div class="field"><label>근무 형태</label><div class="opts c2"><button class="opt ${d.type!=='shift'?'on':''}" data-act="fset" data-k="type" data-v="regular">일반 (매주)</button><button class="opt ${d.type==='shift'?'on':''}" data-act="fset" data-k="type" data-v="shift">교대 근무</button></div></div>`;
-  if(d.type==='shift')h+=`<div class="field"><label>이번 주 근무 (${weekLabel(thisMonday)})</label><div class="opts c2"><button class="opt day ${d.cur==='day'?'on':''}" data-act="fset" data-k="cur" data-v="day">주간 근무</button><button class="opt night ${d.cur==='night'?'on':''}" data-act="fset" data-k="cur" data-v="night">야간 근무</button></div><div class="note">매주 주간 ↔ 야간이 번갈아 바뀌는 걸로 계산해요.</div></div>`;
+  h+=`<div class="field"><label>근무 형태</label><div class="opts c2"><button class="opt ${!shift?'on':''}" data-act="fset" data-k="type" data-v="regular">일반 (매주)</button><button class="opt ${shift?'on':''}" data-act="fset" data-k="type" data-v="shift">교대 근무</button></div></div>`;
+  if(shift)h+=`<div class="field"><label>이번 주 근무 (${weekLabel(thisMonday)})</label><div class="opts c2"><button class="opt day ${d.cur==='day'?'on':''}" data-act="fset" data-k="cur" data-v="day">주간 근무</button><button class="opt night ${d.cur==='night'?'on':''}" data-act="fset" data-k="cur" data-v="night">야간 근무</button></div><div class="note">매주 주간 ↔ 야간이 번갈아 바뀌는 걸로 계산해요.</div></div>`;
+  h+=`<div class="field"><label>레슨 요일 · 시간</label>${d.lessons.length?d.lessons.map((l,i)=>lessonRow(l,i,shift)).join(''):'<div class="note" style="margin:0 0 8px">등록된 레슨이 없어요.</div>'}<button class="btn block" style="height:42px" data-act="ladd">＋ 레슨 추가</button></div>`;
   h+=`<div class="field"><label>메모 (연락처, 특이사항 등)</label><textarea class="inp" data-f="memo" placeholder="선택 입력">${esc(d.memo||'')}</textarea></div>`;
   h+=`<div class="acts"><button class="btn" data-act="${d.id?'student':'close'}" data-id="${d.id||''}">취소</button><button class="btn primary" data-act="savestudent">저장</button></div>`;
-  openSheet(h);
+  if(d.id)h+=`<button class="btn ghost danger block" style="margin-top:8px" data-act="delstudent" data-id="${d.id}">수강생 삭제</button>`;
+  openSheet(h,keep);
 }
 function saveStudent(){
   const d=sheetCtx.d;const name=(d.name||'').trim();if(!name)return toast('이름을 입력해 주세요');
+  const shift=d.type==='shift';
+  const ls=[];
+  for(const l of d.lessons){
+    let c=l.cycle||'weekly';if(!shift&&(c==='day'||c==='night'))c='weekly';
+    const o={id:l.id||uid(),day:+l.day,hour:+l.hour,cycle:c};
+    if(c==='once'||c==='consult'){if(!l.date)return toast('보강·상담 날짜를 골라 주세요');o.date=l.date;o.day=dateDay(l.date)}
+    if(ls.some(x=>x.day===o.day&&x.hour===o.hour&&x.cycle===o.cycle&&x.date===o.date))return toast('같은 레슨이 두 번 들어가 있어요');
+    ls.push(o);
+  }
   let s=d.id?stu(d.id):null;
   if(!s){s={id:uid()};state.students.push(s)}
-  const wasShift=s.type==='shift';
   Object.assign(s,{name,type:d.type,memo:(d.memo||'').trim()});
-  if(d.type==='shift'){s.ref=ymd(thisMonday);s.refShift=d.cur}
-  else{delete s.ref;delete s.refShift;if(wasShift)state.lessons.forEach(l=>{if(l.sid===s.id)l.cycle='weekly'})}
+  if(shift){s.ref=ymd(thisMonday);s.refShift=d.cur}else{delete s.ref;delete s.refShift}
+  state.lessons=state.lessons.filter(l=>l.sid!==s.id).concat(ls.map(o=>({...o,sid:s.id})));
   commit();toast('저장했어요');openStudent(s.id);
 }
 
@@ -687,7 +718,9 @@ document.addEventListener('click',e=>{
     case 'savelesson':saveLesson();break;
     case 'dellesson':confirmDlg('이 레슨을 삭제할까요?','삭제',()=>{state.lessons=state.lessons.filter(l=>l.id!==sheetCtx.d.id);closeSheet();commit();toast('삭제했어요')});break;
     case 'setshift':{const s=stu(sheetCtx.id);s.ref=ymd(thisMonday);s.refShift=v;commit();drawStudent();break}
-    case 'fset':sheetCtx.d[t.dataset.k]=v;drawStudentForm();break;
+    case 'fset':sheetCtx.d[t.dataset.k]=v;drawStudentForm(true);break;
+    case 'ladd':{const st=settings(),d=sheetCtx.d;const c=d.type==='shift'?(d.cur||'day'):'weekly';d.lessons.push({id:null,day:st.days[0],hour:Math.min(Math.max(17,st.start),st.end-1),cycle:c,date:ymd(new Date())});drawStudentForm(true);break}
+    case 'lrmv':sheetCtx.d.lessons.splice(+v,1);drawStudentForm(true);break;
     case 'savestudent':saveStudent();break;
     case 'delstudent':{const s=stu(id);confirmDlg(`${esc(s.name)}을(를) 삭제할까요?<br><span style="font-size:13px;color:var(--sub)">등록된 레슨도 함께 지워져요.</span>`,'삭제',()=>{state.students=state.students.filter(x=>x.id!==id);state.lessons=state.lessons.filter(l=>l.sid!==id);if(view.focus===id)view.focus=null;closeSheet();commit();toast('삭제했어요')});break}
     case 'export':openExport();break;
@@ -701,7 +734,15 @@ document.addEventListener('click',e=>{
     case 'dlgyes':{const d=$('#dlg');d.classList.remove('on');d._yes&&d._yes();break}
   }
 });
-document.addEventListener('change',e=>{if(e.target.dataset&&e.target.dataset.f==='restore'){doRestore(e.target.files&&e.target.files[0]);e.target.value=''}});
+document.addEventListener('change',e=>{
+  const ds=e.target.dataset||{};
+  if(ds.f==='restore'){doRestore(e.target.files&&e.target.files[0]);e.target.value='';return}
+  if(ds.li!==undefined&&sheetCtx&&sheetCtx.kind==='sform'){
+    const l=sheetCtx.d.lessons[+ds.li];if(!l)return;const k=ds.lk,v=e.target.value;
+    if(k==='day'||k==='hour')l[k]=+v;else l[k]=v;
+    if(k==='cycle'){if((v==='once'||v==='consult')&&!l.date)l.date=ymd(addDays(thisMonday,l.day));drawStudentForm(true)}
+  }
+});
 document.addEventListener('input',e=>{
   const f=e.target.dataset.f;if(!f)return;
   if(f==='restore')return;
