@@ -32,7 +32,7 @@ input,select,textarea{font:inherit;color:inherit}
 .top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 4px 12px}
 .top h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.3px}
 .top .sub{font-size:12.5px;color:var(--sub);margin-top:2px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:0 14px;border-radius:11px;font-weight:600;font-size:14px;background:var(--card);border:1px solid var(--line)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;height:38px;padding:0 14px;border-radius:11px;font-weight:600;font-size:14px;background:var(--card);border:1px solid var(--line)}
 .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 .btn.ghost{background:transparent;border-color:transparent;color:var(--sub)}
 .btn.danger{color:var(--danger)}
@@ -86,6 +86,7 @@ input,select,textarea{font:inherit;color:inherit}
 .list{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-top:1px solid var(--line2);text-align:left}
 .row:first-child{border-top:0}
+.locked .tabs,.locked [data-act=export]{display:none}
 .row{cursor:pointer}
 .editbtn{flex:none;width:40px;height:40px;margin:-6px -8px -6px 0;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#B9B2A7}
 .editbtn:active{background:#EFEBE4;color:var(--ink)}
@@ -181,6 +182,33 @@ textarea.inp{height:76px;padding:10px 12px;resize:none}
 <div class="dlg" id="dlg"></div>
 <div class="toast" id="toast"></div>
 
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyADJYGE5xhU0FigvOs8wiOhSZVNfDtCojc",
+  authDomain: "lesson-schedule-16d8b.firebaseapp.com",
+  projectId: "lesson-schedule-16d8b",
+  storageBucket: "lesson-schedule-16d8b.firebasestorage.app",
+  messagingSenderId: "964353771273",
+  appId: "1:964353771273:web:24126480953b64343d35d8"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+let db;
+try { db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }) }); }
+catch (e) { db = initializeFirestore(app, {}); }
+const ref = doc(db, "schedules", "main");
+window.FB = {
+  onAuth: (cb) => onAuthStateChanged(auth, cb),
+  signIn: (email, pw) => signInWithEmailAndPassword(auth, email, pw),
+  signOut: () => signOut(auth),
+  listen: (next, err) => onSnapshot(ref, { includeMetadataChanges: true }, next, err),
+  save: (body) => setDoc(ref, body)
+};
+window.dispatchEvent(new Event("fb-ready"));
+</script>
 <script>
 /* ---------- constants & helpers ---------- */
 const DAYS=['월','화','수','목','금','토','일'];
@@ -194,6 +222,8 @@ function hoursList(){const s=settings(),a=[];for(let h=s.start;h<s.end;h++)a.pus
 const LSKEY='vocal-lesson-schedule-v1';
 const SEED=null;/*SEED*/
 const PWA=true;
+const CLOUD=true;
+let cloudUser=null,cloudUnsub=null,cloudFirst=true,cloudAsked=false;
 const NATIVE=!!(window.__NATIVE__&&window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.native);
 const nativePost=m=>{try{window.webkit.messageHandlers.native.postMessage(m)}catch(e){}};
 const $=s=>document.querySelector(s);
@@ -245,7 +275,11 @@ async function flush(){
   if(saving||!dirty)return; saving=true; dirty=false;
   const body={students:state.students,lessons:state.lessons,settings:state.settings||null,updatedAt:Date.now()};
   try{
-    if(NATIVE) nativePost({type:'save',json:JSON.stringify(body)});
+    if(CLOUD){
+      try{localStorage.setItem(LSKEY,JSON.stringify(body))}catch(e){}
+      if(cloudUser&&window.FB){body.updatedBy=cloudUser.email||'';window.FB.save(body).catch(err=>{showBanner(err&&err.code==='permission-denied'?'이 계정은 시간표를 수정할 수 없어요.':'클라우드에 저장하지 못했어요. 인터넷 연결을 확인해 주세요.')})}
+    }
+    else if(NATIVE) nativePost({type:'save',json:JSON.stringify(body)});
     else if(store) await store.set(body);
     else { try{localStorage.setItem(LSKEY,JSON.stringify(body))}catch(e){} }
   }catch(e){
@@ -261,7 +295,46 @@ function applyRemote(d){
   render();
 }
 function showBanner(t){const b=$('#banner');b.textContent=t;b.classList.toggle('on',!!t)}
+function cacheLocal(){try{localStorage.setItem(LSKEY,JSON.stringify({students:state.students,lessons:state.lessons,settings:state.settings||null,updatedAt:Date.now()}))}catch(e){}}
+function cloudStop(){if(cloudUnsub){try{cloudUnsub()}catch(e){}cloudUnsub=null}}
+function cloudListen(){
+  if(cloudUnsub)return;cloudFirst=true;
+  cloudUnsub=window.FB.listen(snap=>{
+    if(snap.metadata.hasPendingWrites)return;
+    if(snap.exists()){
+      if(!dirty&&!saving){applyRemote(snap.data());cacheLocal()}
+    }else if(!snap.metadata.fromCache&&cloudFirst&&!cloudAsked){
+      cloudAsked=true;
+      if(state.students.length){
+        confirmDlg(`클라우드에 아직 시간표가 없어요.<br>이 기기의 시간표(수강생 ${state.students.length}명)를 올릴까요?<br><span style="font-size:13px;color:var(--sub)">올리면 같이 쓰는 사람에게도 이 시간표가 보여요.</span>`,'올리기',()=>{dirty=true;flush();toast('클라우드에 올렸어요')});
+      }
+    }
+    if(!snap.metadata.fromCache){cloudFirst=false;showBanner('')}
+  },err=>{
+    showBanner(err&&err.code==='permission-denied'?'이 계정은 시간표에 접근할 수 없어요. 설정에서 로그아웃한 뒤 다른 계정으로 로그인해 주세요.':'동기화 중 문제가 생겼어요. 앱을 다시 열어 주세요.');
+  });
+}
+function cloudStart(){
+  window.FB.onAuth(u=>{
+    cloudUser=u||null;
+    if(!u){cloudStop();view.auth='login';render();return}
+    view.auth='ok';readOnly=false;showBanner('');render();cloudListen();
+  });
+}
 async function init(){
+  if(CLOUD){
+    loaded=true;view.auth='loading';
+    try{const raw=localStorage.getItem(LSKEY);if(raw)applyRemote(JSON.parse(raw))}catch(e){}
+    try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+    if('serviceWorker' in navigator){try{navigator.serviceWorker.register('sw.js')}catch(e){}}
+    render();
+    if(window.FB)cloudStart();
+    else{
+      window.addEventListener('fb-ready',cloudStart,{once:true});
+      setTimeout(()=>{if(!window.FB){readOnly=true;view.auth='offline';showBanner('인터넷에 연결되지 않아 이 기기에 저장된 시간표를 보기 전용으로 보여줘요. 연결된 뒤 앱을 다시 열어 주세요.');render()}},12000);
+    }
+    return;
+  }
   if(PWA){
     loaded=true;
     try{const raw=localStorage.getItem(LSKEY);if(raw)applyRemote(JSON.parse(raw))}catch(e){}
@@ -295,8 +368,26 @@ async function init(){
     showBanner(err&&err.code==='revoked'?'이 시간표에 접근할 수 없어요.':'시간표를 불러오지 못했어요. 페이지를 다시 열어 주세요.')});
 }
 
+/* ---------- login ---------- */
+function renderLogin(){
+  return `<div class="card" style="padding:28px 22px;max-width:420px;margin:24px auto 0"><div style="font-size:20px;font-weight:700;margin-bottom:6px">로그인</div><div class="note" style="font-size:13.5px;margin:0 0 20px">같이 쓰는 계정으로 로그인하면 시간표가 모든 기기에 똑같이 보여요.</div><form id="loginf" autocomplete="on"><div class="field"><label for="le">이메일</label><input class="inp" id="le" type="email" autocomplete="username" inputmode="email" autocapitalize="off" required></div><div class="field"><label for="lp">비밀번호</label><input class="inp" id="lp" type="password" autocomplete="current-password" required></div><button class="btn primary block" type="submit" id="lbtn">로그인</button><div class="note" id="lerr" style="text-align:center;color:var(--danger);min-height:18px"></div></form></div>`;
+}
+document.addEventListener('submit',async e=>{
+  if(e.target.id!=='loginf')return;e.preventDefault();
+  const em=$('#le').value.trim(),pw=$('#lp').value,btn=$('#lbtn'),er=$('#lerr');
+  if(!window.FB){er.textContent='아직 연결 중이에요. 잠시 후 다시 눌러 주세요.';return}
+  btn.disabled=true;btn.textContent='로그인 중…';er.textContent='';
+  try{await window.FB.signIn(em,pw)}
+  catch(err){const c=err&&err.code||'';
+    er.textContent=c.includes('too-many')?'시도가 너무 많았어요. 잠시 후 다시 해 주세요.':c.includes('network')?'인터넷 연결을 확인해 주세요.':c.includes('invalid-email')?'이메일 형식을 확인해 주세요.':'이메일 또는 비밀번호가 맞지 않아요.';
+    btn.disabled=false;btn.textContent='로그인'}
+});
+
 /* ---------- render ---------- */
 function render(){
+  const locked=CLOUD&&(view.auth==='login'||view.auth==='loading');
+  document.body.classList.toggle('locked',locked);
+  if(locked){$('#main').innerHTML=view.auth==='login'?renderLogin():'<div class="empty">불러오는 중…</div>';return}
   $('#t-schedule').classList.toggle('on',view.tab==='schedule');
   $('#t-students').classList.toggle('on',view.tab==='students');
   $('#main').innerHTML=view.tab==='schedule'?renderSchedule():renderStudents();
@@ -453,6 +544,7 @@ function drawSettings(){
   h+=`<div class="field"><label>수업 시간</label><div style="display:flex;align-items:center;gap:8px"><select class="inp" data-f="start">${ALLH.slice(0,-1).map(x=>`<option value="${x}" ${x===d.start?'selected':''}>${hh(x)}</option>`).join('')}</select><span style="color:var(--sub)">~</span><select class="inp" data-f="end">${ALLH.slice(1).map(x=>`<option value="${x}" ${x===d.end?'selected':''}>${hh(x)}</option>`).join('')}</select></div><div class="note">마지막 수업은 ${hh(d.end-1)}–${hh(d.end)}이에요. 토요일이나 21:00–22:00 수업이 생기면 여기서 켜 주세요.</div></div>`;
   h+=`<div class="box" style="font-size:13px;color:var(--sub);line-height:1.5">요일이나 시간을 숨겨도 레슨 데이터는 지워지지 않아요.${out?`<br><b style="color:var(--danger)">지금 설정이면 레슨 ${out}개가 시간표에서 안 보여요.</b>`:''}</div>`;
   h+=`<div class="acts"><button class="btn" data-act="close">취소</button><button class="btn primary" data-act="savesettings">저장</button></div>`;
+  if(CLOUD&&cloudUser)h+=`<div class="sec" style="margin-top:22px">계정</div><div class="box" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(cloudUser.email||'')}<div class="note" style="margin:2px 0 0">이 계정으로 동기화 중이에요</div></div><button class="btn" data-act="logout">로그아웃</button></div>`;
   h+=`<div class="sec" style="margin-top:22px">데이터 백업</div><div class="note" style="margin:0 0 10px">수강생과 시간표 전체를 파일 하나로 저장해 두거나, 저장해 둔 파일로 되돌릴 수 있어요.${NATIVE||PWA?' 홈 화면 아이콘(앱)을 지우면 데이터도 지워지니 가끔 백업해 두세요.':''}</div>`;
   h+=`<div class="acts" style="margin-top:0"><button class="btn" data-act="backup">백업 파일 저장</button><label class="btn" style="cursor:pointer">백업 불러오기<input type="file" accept=".json,application/json" data-f="restore" style="display:none"></label></div><div class="note" id="bnote" style="text-align:center"></div>`;
   openSheet(h);
@@ -728,6 +820,7 @@ document.addEventListener('click',e=>{
     case 'tday':{const a=sheetCtx.d.days,i=+v;sheetCtx.d.days=a.includes(i)?a.filter(x=>x!==i):[...a,i];drawSettings();break}
     case 'savesettings':saveSettings();break;
     case 'backup':doBackup();break;
+    case 'logout':confirmDlg('로그아웃할까요?<br><span style="font-size:13px;color:var(--sub)">다시 로그인하면 시간표가 그대로 보여요.</span>','로그아웃',()=>{closeSheet();cloudStop();window.FB&&window.FB.signOut()});break;
     case 'xset':sheetCtx[t.dataset.k]=v;drawExport();break;
     case 'dosave':doSave();break;
     case 'dlgno':$('#dlg').classList.remove('on');break;
